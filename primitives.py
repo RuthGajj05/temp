@@ -161,9 +161,9 @@ def turn_left(angle: float, speed: int, duration: Optional[float] = None) -> str
             return f"Turning left continuously at {angle}° angle, {speed}% speed. Call stop() to halt."
         else:
             # Timed movement
-    px.forward(speed)
-    time.sleep(duration)
-    px.stop()
+            px.forward(speed)
+            time.sleep(duration)
+            px.stop()
             # Reset steering to straight
             px.set_dir_servo_angle(0)
             _servo_angles['dir_servo'] = 0
@@ -196,8 +196,8 @@ def turn_right(angle: float, speed: int, duration: Optional[float] = None) -> st
         else:
             # Timed movement
             px.forward(speed)
-    time.sleep(duration)
-    px.stop()  
+            time.sleep(duration)
+            px.stop()
             # Reset steering to straight
             px.set_dir_servo_angle(0)
             _servo_angles['dir_servo'] = 0
@@ -234,9 +234,9 @@ def turn_in_place_left(angle: float, speed: int, duration: Optional[float] = Non
             return f"Turning left in place continuously at {speed}% speed. Call stop() to halt."
         else:
             # Timed movement
-    px.forward(speed)
-    time.sleep(duration)
-    px.stop()
+            px.forward(speed)
+            time.sleep(duration)
+            px.stop()
             # Reset motor calibration to normal
             px.cali_dir_value = [1, 1]
             return f"Turned left in place by ~{angle}° for {duration:.2f}s at {speed}% speed"
@@ -278,9 +278,9 @@ def turn_in_place_right(angle: float, speed: int, duration: Optional[float] = No
             return f"Turning right in place continuously at {speed}% speed. Call stop() to halt."
         else:
             # Timed movement
-    px.forward(speed)
-    time.sleep(duration)
-    px.stop()
+            px.forward(speed)
+            time.sleep(duration)
+            px.stop()
             # Reset motor calibration to normal
             px.cali_dir_value = [1, 1]
             return f"Turned right in place by ~{angle}° for {duration:.2f}s at {speed}% speed"
@@ -300,7 +300,7 @@ def stop() -> str:
     global _continuous_movement
     try:
         px = get_picarx()
-    px.stop()
+        px.stop()
         _continuous_movement = False
         return "Robot stopped"
     except Exception as e:
@@ -330,7 +330,7 @@ def set_dir_servo_angle(angle: float) -> str:
     try:
         global _servo_angles
         px = get_picarx()
-    px.set_dir_servo_angle(angle)
+        px.set_dir_servo_angle(angle)
         _servo_angles['dir_servo'] = angle
         return f"Direction servo set to {angle}°"
     except Exception as e:
@@ -345,7 +345,7 @@ def set_cam_pan_angle(angle: float) -> str:
     try:
         global _servo_angles
         px = get_picarx()
-    px.set_cam_pan_angle(angle)
+        px.set_cam_pan_angle(angle)
         _servo_angles['cam_pan'] = angle
         return f"Camera pan servo set to {angle}°"
     except Exception as e:
@@ -360,7 +360,7 @@ def set_cam_tilt_angle(angle: float) -> str:
     try:
         global _servo_angles
         px = get_picarx()
-    px.set_cam_tilt_angle(angle)
+        px.set_cam_tilt_angle(angle)
         _servo_angles['cam_tilt'] = angle
         return f"Camera tilt servo set to {angle}°"
     except Exception as e:
