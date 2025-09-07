@@ -1,0 +1,7 @@
+openai>=1.0.0
+openai-agents
+picarx
+robot-hat
+vilib
+opencv-python
+numpy 
