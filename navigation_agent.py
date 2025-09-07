@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from primitives import *
 from openai import OpenAI
 from keys import OPENAI_API_KEY
+import base64
 
 class NavigationAgent:
     def __init__(self):
@@ -23,7 +24,64 @@ class NavigationAgent:
         self.target_distance = None
         self.target_object = None
         self.navigation_active = False
+        self.attempt_count = 0
         
+    def analyze_surroundings(self, target_object: str) -> str:
+        """Analyze the surroundings to identify the target object."""
+        try:
+            # Initialize camera
+            camera_result = init_camera()
+            print(f"Camera: {camera_result}")
+            
+            # Take a picture of the surroundings
+            photo_result = capture_image("surroundings_analysis.jpg")
+            print(f"Photo: {photo_result}")
+            
+            # Extract file path from result
+            if "successfully" in photo_result.lower():
+                # Find the file path in the result
+                import re
+                path_match = re.search(r': (.+\.jpg)', photo_result)
+                if path_match:
+                    image_path = path_match.group(1)
+                    
+                    # Analyze the image with GPT-4 Vision
+                    with open(image_path, "rb") as image_file:
+                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                    
+                    response = self.client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": f"Look at this image and identify if you can see a {target_object}. If you can see it, describe its location relative to the camera (left, right, center, far, close, etc.). If you cannot see it, say 'not visible' and describe what objects you can see instead."
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=300
+                    )
+                    
+                    analysis = response.choices[0].message.content
+                    print(f"Vision Analysis: {analysis}")
+                    return analysis
+                else:
+                    return "Could not extract image path from capture result"
+            else:
+                return "Failed to capture image for analysis"
+                
+        except Exception as e:
+            return f"Vision analysis error: {str(e)}"
+
     def navigate_to_distance(self, target_distance: float, target_object: str = "object") -> str:
         """
         Navigate towards the nearest object until reaching the specified distance.
@@ -40,6 +98,11 @@ class NavigationAgent:
             # Reset robot to starting position
             reset_result = reset()
             print(f"Reset: {reset_result}")
+            
+            # Analyze surroundings to identify the target object
+            print(f"🔍 Analyzing surroundings to find {target_object}...")
+            vision_analysis = self.analyze_surroundings(target_object)
+            print(f"Vision Analysis: {vision_analysis}")
             
             # Start navigation loop
             while self.navigation_active:
@@ -74,6 +137,19 @@ class NavigationAgent:
                     self.navigation_active = False
                     return f"❌ Navigation stopped due to obstacle detection: {move_result}"
                 
+                # Periodically re-analyze surroundings to ensure we're heading toward the right object
+                if self.attempt_count % 5 == 0:  # Every 5 attempts
+                    print("🔄 Re-analyzing surroundings...")
+                    vision_analysis = self.analyze_surroundings(target_object)
+                    print(f"Updated Vision Analysis: {vision_analysis}")
+                    
+                    # If target is not visible, try to turn to find it
+                    if "not visible" in vision_analysis.lower():
+                        print("Target not visible, turning to search...")
+                        turn_result = turn_in_place_left(45, 25, 1.0)
+                        print(f"Search turn: {turn_result}")
+                
+                self.attempt_count += 1
                 # Small delay for sensor stability
                 time.sleep(0.1)
             
