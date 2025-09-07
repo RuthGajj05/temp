@@ -15,6 +15,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from primitives import *
 from openai import OpenAI
 from keys import OPENAI_API_KEY
+import base64
 
 class ObstacleAvoidanceAgent:
     def __init__(self):
@@ -24,7 +25,64 @@ class ObstacleAvoidanceAgent:
         self.target_object = None
         self.max_attempts = 50  # Maximum navigation attempts
         self.attempt_count = 0
+        self.target_location = None  # Store vision analysis of target location
         
+    def analyze_surroundings(self, target_object: str) -> str:
+        """Analyze the surroundings to identify the target object and obstacles."""
+        try:
+            # Initialize camera
+            camera_result = init_camera()
+            print(f"Camera: {camera_result}")
+            
+            # Take a picture of the surroundings
+            photo_result = capture_image("obstacle_analysis.jpg")
+            print(f"Photo: {photo_result}")
+            
+            # Extract file path from result
+            if "successfully" in photo_result.lower():
+                # Find the file path in the result
+                import re
+                path_match = re.search(r': (.+\.jpg)', photo_result)
+                if path_match:
+                    image_path = path_match.group(1)
+                    
+                    # Analyze the image with GPT-4 Vision
+                    with open(image_path, "rb") as image_file:
+                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                    
+                    response = self.client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": f"Look at this image and identify: 1) Can you see a {target_object}? If yes, describe its location (left, right, center, far, close). 2) What obstacles are visible that might block navigation? 3) What is the best path to reach the {target_object}? Describe the navigation strategy."
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=400
+                    )
+                    
+                    analysis = response.choices[0].message.content
+                    print(f"Vision Analysis: {analysis}")
+                    return analysis
+                else:
+                    return "Could not extract image path from capture result"
+            else:
+                return "Failed to capture image for analysis"
+                
+        except Exception as e:
+            return f"Vision analysis error: {str(e)}"
+
     def navigate_around_obstacles(self, target_object: str = "destination") -> str:
         """
         Navigate to a target while avoiding obstacles.
@@ -41,9 +99,11 @@ class ObstacleAvoidanceAgent:
             reset_result = reset()
             print(f"Reset: {reset_result}")
             
-            # Initialize camera for visual navigation
-            camera_result = init_camera()
-            print(f"Camera: {camera_result}")
+            # Analyze surroundings to identify target and obstacles
+            print(f"🔍 Analyzing surroundings to find {target_object} and identify obstacles...")
+            vision_analysis = self.analyze_surroundings(target_object)
+            print(f"Vision Analysis: {vision_analysis}")
+            self.target_location = vision_analysis
             
             while self.navigation_active and self.attempt_count < self.max_attempts:
                 self.attempt_count += 1
@@ -76,7 +136,14 @@ class ObstacleAvoidanceAgent:
                 photo_result = capture_image(f"navigation_attempt_{self.attempt_count}.jpg")
                 print(f"Photo: {photo_result}")
                 
-                # Decide on movement strategy based on sensors
+                # Re-analyze surroundings periodically for better navigation
+                if self.attempt_count % 3 == 0:  # Every 3 attempts
+                    print("🔄 Re-analyzing surroundings for better navigation...")
+                    vision_analysis = self.analyze_surroundings(target_object)
+                    print(f"Updated Vision Analysis: {vision_analysis}")
+                    self.target_location = vision_analysis
+                
+                # Decide on movement strategy based on sensors and vision
                 if current_distance > 50.0:
                     # Far away - move forward
                     print("Strategy: Moving forward (far from target)")
@@ -114,28 +181,87 @@ class ObstacleAvoidanceAgent:
             return f"Navigation error: {str(e)}"
     
     def _avoid_obstacle(self) -> str:
-        """Attempt to avoid an obstacle using various strategies."""
+        """Attempt to avoid an obstacle using various strategies with vision guidance."""
         try:
-            print("Attempting obstacle avoidance...")
+            print("Attempting obstacle avoidance with vision guidance...")
             
-            # Strategy 1: Turn left and try forward
-            print("Strategy 1: Turn left and try forward")
-            turn_result = turn_in_place_left(45, 30, 1.0)
-            print(f"Turn left: {turn_result}")
+            # Take a photo to analyze the obstacle
+            photo_result = capture_image("obstacle_avoidance.jpg")
+            print(f"Obstacle photo: {photo_result}")
             
-            # Check if path is clear
+            # Analyze the obstacle and find the best avoidance path
+            if "successfully" in photo_result.lower():
+                import re
+                path_match = re.search(r': (.+\.jpg)', photo_result)
+                if path_match:
+                    image_path = path_match.group(1)
+                    
+                    with open(image_path, "rb") as image_file:
+                        base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+                    
+                    response = self.client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": f"I'm blocked by an obstacle. Look at this image and suggest the best direction to turn (left or right) to avoid the obstacle and continue toward the {self.target_object}. Consider the obstacle's position and the best path around it."
+                                    },
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=200
+                    )
+                    
+                    avoidance_advice = response.choices[0].message.content
+                    print(f"Vision Avoidance Advice: {avoidance_advice}")
+                    
+                    # Use vision advice to choose avoidance direction
+                    if "left" in avoidance_advice.lower():
+                        print("Strategy: Vision suggests turning left")
+                        turn_result = turn_in_place_left(45, 30, 1.0)
+                        print(f"Turn left: {turn_result}")
+                    elif "right" in avoidance_advice.lower():
+                        print("Strategy: Vision suggests turning right")
+                        turn_result = turn_in_place_right(45, 30, 1.0)
+                        print(f"Turn right: {turn_result}")
+                    else:
+                        # Default to left if unclear
+                        print("Strategy: Default to turning left")
+                        turn_result = turn_in_place_left(45, 30, 1.0)
+                        print(f"Turn left: {turn_result}")
+                else:
+                    # Fallback to default strategy
+                    print("Strategy: Fallback to default left turn")
+                    turn_result = turn_in_place_left(45, 30, 1.0)
+                    print(f"Turn left: {turn_result}")
+            else:
+                # Fallback to default strategy
+                print("Strategy: Fallback to default left turn")
+                turn_result = turn_in_place_left(45, 30, 1.0)
+                print(f"Turn left: {turn_result}")
+            
+            # Check if path is clear after turning
             distance_result = get_ultrasonic_distance()
             try:
                 distance = float(distance_result.split()[4])
                 if distance > 20.0:
                     move_result = move_forward(25, 1.0, check_obstacles=True)
                     if "stopped early" not in move_result.lower():
-                        return f"✅ Avoidance successful! Turned left and moved forward. {move_result}"
+                        return f"✅ Avoidance successful! Used vision guidance and moved forward. {move_result}"
             except (IndexError, ValueError):
                 pass
             
-            # Strategy 2: Turn right and try forward
-            print("Strategy 2: Turn right and try forward")
+            # If left turn didn't work, try right
+            print("Strategy: Trying right turn")
             turn_result = turn_in_place_right(90, 30, 1.5)
             print(f"Turn right: {turn_result}")
             
