@@ -208,7 +208,7 @@ def turn_right(angle: float, speed: int, duration: Optional[float] = None) -> st
 
 @function_tool
 def turn_in_place_left(angle: float, speed: int, duration: Optional[float] = None) -> str:
-    """Turn left in place using differential motor control (no forward movement)."""
+    """Turn left in place using individual motor control (no forward movement)."""
     global _servo_angles, _continuous_movement
     
     # Validate and clamp parameters
@@ -224,35 +224,35 @@ def turn_in_place_left(angle: float, speed: int, duration: Optional[float] = Non
             duration = (angle / 90.0) * (50.0 / max(speed, 1))  # Scale by speed
             duration = max(0.5, min(duration, 10.0))  # Clamp between 0.5 and 10 seconds
         
-        # Set motor calibration for left turn in place: left motor backward, right motor forward
-        px.cali_dir_value = [-1, 1]
-        _servo_angles['dir_servo'] = 0  # Keep steering straight
+        # Set steering to straight to avoid any steering influence
+        px.set_dir_servo_angle(0)
+        _servo_angles['dir_servo'] = 0
         
         if _continuous_movement:
-            # Continuous movement mode
-            px.forward(speed)
+            # Continuous movement mode - use individual motor control
+            px.set_motor_speed(1, -speed)  # Left motor backward
+            px.set_motor_speed(2, speed)   # Right motor forward
             return f"Turning left in place continuously at {speed}% speed. Call stop() to halt."
         else:
-            # Timed movement
-            px.forward(speed)
+            # Timed movement - use individual motor control
+            px.set_motor_speed(1, -speed)  # Left motor backward
+            px.set_motor_speed(2, speed)   # Right motor forward
             time.sleep(duration)
             px.stop()
-            # Reset motor calibration to normal
-            px.cali_dir_value = [1, 1]
             return f"Turned left in place by ~{angle}° for {duration:.2f}s at {speed}% speed"
             
     except Exception as e:
-        # Ensure we reset calibration even on error
+        # Ensure we stop motors even on error
         try:
             px = get_picarx()
-            px.cali_dir_value = [1, 1]
+            px.stop()
         except:
             pass
         return f"Turn in place left failed: {str(e)}"
 
 @function_tool
 def turn_in_place_right(angle: float, speed: int, duration: Optional[float] = None) -> str:
-    """Turn right in place using differential motor control (no forward movement)."""
+    """Turn right in place using individual motor control (no forward movement)."""
     global _servo_angles, _continuous_movement
     
     # Validate and clamp parameters
@@ -268,28 +268,28 @@ def turn_in_place_right(angle: float, speed: int, duration: Optional[float] = No
             duration = (angle / 90.0) * (50.0 / max(speed, 1))  # Scale by speed
             duration = max(0.5, min(duration, 10.0))  # Clamp between 0.5 and 10 seconds
         
-        # Set motor calibration for right turn in place: left motor forward, right motor backward
-        px.cali_dir_value = [1, -1]
-        _servo_angles['dir_servo'] = 0  # Keep steering straight
+        # Set steering to straight to avoid any steering influence
+        px.set_dir_servo_angle(0)
+        _servo_angles['dir_servo'] = 0
         
         if _continuous_movement:
-            # Continuous movement mode
-            px.forward(speed)
+            # Continuous movement mode - use individual motor control
+            px.set_motor_speed(1, speed)   # Left motor forward
+            px.set_motor_speed(2, -speed)  # Right motor backward
             return f"Turning right in place continuously at {speed}% speed. Call stop() to halt."
         else:
-            # Timed movement
-            px.forward(speed)
+            # Timed movement - use individual motor control
+            px.set_motor_speed(1, speed)   # Left motor forward
+            px.set_motor_speed(2, -speed)  # Right motor backward
             time.sleep(duration)
             px.stop()
-            # Reset motor calibration to normal
-            px.cali_dir_value = [1, 1]
             return f"Turned right in place by ~{angle}° for {duration:.2f}s at {speed}% speed"
             
     except Exception as e:
-        # Ensure we reset calibration even on error
+        # Ensure we stop motors even on error
         try:
             px = get_picarx()
-            px.cali_dir_value = [1, 1]
+            px.stop()
         except:
             pass
         return f"Turn in place right failed: {str(e)}"
